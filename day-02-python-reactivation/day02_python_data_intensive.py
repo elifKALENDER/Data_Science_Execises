@@ -41,7 +41,7 @@ Protocol
 from pathlib import Path
 import json
 import pandas as pd
-from pandas.core.dtypes.common import is_numeric_dtype
+from seaborn.utils import axis_ticklabels_overlap
 from unicodedata import numeric
 
 DATA_PATH = Path("machine_sensor_dirty.csv")
@@ -727,16 +727,16 @@ df_stat=df_clean.describe()
 print(df_stat)
 print(f"{df_stat.loc[["mean","50%"],["temperature"]]}\n "
       f"The mean and median temperatures are close," 
-    f"which suggests limited skewness in this small sample.")
+    f"which suggests limited skewness in this small sample.")# loc[row,column]
 print(f"{df_stat.loc[["max"],["vibration"]]}\n"
       f"Maximum vibration shows the highest observed vibration value.")
 print(f"{df_stat.loc[["min"],["pressure"]]}\n"
       f"Minimum pressure shows the lowest observed pressure value.")
 print(f"{anomaly_count}\n"
-      f"aAnomaly count is the number of records satisfying the anomaly condition.")
+      f"Anomaly count is the number of records satisfying the anomaly condition.")
 anomaly_rate=anomaly_count/len(df_anomaly)
 print(f"{anomaly_rate}\n"
-      f"Anomaly rate represents the proportion of anomalous records in the dataset.")
+      f"Anomaly rate represents the proportion of anomalys records in the dataset.")
 
 # EXERCISE 16 — GroupBy
 """
@@ -757,7 +757,15 @@ sort by mean temperature descending.
 """
 
 # TODO
-
+print(df_clean.groupby("status").count())
+print(df_clean.groupby("status")[["temperature", "vibration"]].mean())
+summary1= df_clean.groupby("status")[["temperature", "vibration"]].mean()
+print(summary1.sort_values("temperature",ascending=False))
+"""
+filtering      → satırları seç
+groupby        → satırları gruplara ayır
+aggregation    → grupları özetle
+sorting        → sonucu sırala"""
 
 # EXERCISE 17 — Sorting
 """
@@ -774,7 +782,8 @@ Display machine_id and useful sensor/status columns.
 """
 
 # TODO
-
+print(df_clean.sort_values("temperature",ascending=False).head(3)[["machine_id", "temperature", "vibration", "pressure", "status"]])
+print(df_clean.sort_values("vibration",ascending=False).head(3)[["machine_id", "temperature", "vibration", "pressure", "status"]])
 
 # EXERCISE 18 — Simple Risk Score
 """
@@ -799,7 +808,24 @@ The important point:
 this is a rule-based coding exercise, not a trained ML model.
 """
 
-# TODO
+
+df_risk_score=df_clean.copy()
+#this part creat Bool value . if we query in a df it's create dataframe
+df_risk_score["temperature_flag"] = df_clean["temperature"] > 80
+df_risk_score["vibration_flag"] = df_clean["vibration"] > 2.0
+df_risk_score["pressure_flag"] = df_clean["pressure"] > 55
+
+df_risk_score["risk_score"]=df_risk_score[["temperature_flag","vibration_flag","pressure_flag"]].sum(axis=1)# sum(axis=1) means sum along rows,sum(axis=0) means sum along columns
+print(df_risk_score)
+df_risk_score=df_risk_score.drop(columns=["temperature","vibration","pressure","status"]) # it may write in this way df_risk_score.drop(["temperature", "vibration", "pressure"],axis=1,inplace=True)
+# axis=1 → columns
+# axis=0 → rows
+# inplace=True → modify the same DataFrame
+print(df_risk_score.sort_values("risk_score",ascending=False))
+
+# This is a simple rule-based risk score, not a trained ML model.
+# The thresholds are manually defined for temperature, vibration, and pressure.
+# The score does not learn patterns from historical data or use train/test evaluation.
 
 
 # ============================================================
@@ -827,8 +853,12 @@ Test it first with:
 """
 
 def load_sensor_data(path):
-    # TODO
-    pass
+    try:
+        df = pd.read_csv(path)
+        return df
+    except FileNotFoundError:
+        print("there is no such a file")
+        return None
 
 
 # EXERCISE 20 — Cleaner
@@ -854,9 +884,17 @@ Reuse the decisions you already made.
 """
 
 def clean_sensor_data(df):
-    # TODO
-    pass
+    df_c=df.copy()
+    df_c=df_c.drop_duplicates()
 
+    df_c["status"]= df_c["status"].str.strip().str.lower()
+    df_c["temperature"]=pd.to_numeric(df_c["temperature"],errors="coerce")
+    df_c[["temperature","vibration","pressure"]]=df_c[["temperature","vibration","pressure"]].fillna(df_c[["temperature","vibration","pressure"]].mean())
+
+    return df_c
+
+
+print(f"flg:{clean_sensor_data(df_raw)}")
 
 # EXERCISE 21 — Feature Creation
 """
@@ -869,17 +907,30 @@ Write:
 
 Add:
 - anomaly
+temperature > 85 OR vibration > 2.5
 - optional risk_score
-
++1 temperature > 80
++1 vibration > 2.0
++1 pressure > 55
 Return DataFrame.
 
 Reuse the rule you already practiced in Block C.
 """
 
 def add_anomaly_feature(df):
-    # TODO
-    pass
+    df_anomaly=df.copy()
+    df_anomaly["anomaly"]=(df["temperature"]>85) | (df["vibration"]>2.5)
 
+    df_anomaly["temperature_flag"]=(df["temperature"]>80)
+    df_anomaly["vibration_flag"]=(df["vibration"]>2.0)
+    df_anomaly["pressure_flag"]=(df["pressure"]>55)
+
+    df_anomaly["risk_score"] =df_anomaly[["temperature_flag","vibration_flag","pressure_flag"]].sum(axis=1)
+    anomaly_feature=df_anomaly.sort_values("risk_score",ascending=False)[["machine_id","temperature","vibration","pressure","anomaly","risk_score"]]
+    return anomaly_feature
+
+result_df= add_anomaly_feature(df_clean)
+print(result_df)
 
 # EXERCISE 22 — Summary Function
 """
@@ -901,8 +952,30 @@ Return dictionary with at least:
 """
 
 def summarize_sensor_data(df):
-    # TODO
-    pass
+    row_Count=int(len(df))
+    mean_Temperature=float(df["temperature"].mean())
+    max_Vibration=float(df["vibration"].max())
+    anomaly_Count=int(((df["temperature"]>85)| (df["vibration"]>2.5)).sum())
+    anomaly_Rate=float(anomaly_Count/row_Count)
+    summary={
+        "row_count":row_Count,
+        "mean_temperature":mean_Temperature,
+        "max_vibration":max_Vibration,
+        "anomaly_count":anomaly_Count,
+        "anomaly_rate":anomaly_Rate
+    }
+
+    print(f"row_count        : {summary["row_count"]}\n"
+          f"mean_temperature : {summary["mean_temperature"]:.2f}\n"
+          f"max_vibration    : {summary["max_vibration"]:.2f}\n"
+          f"anomaly_count    : {summary["anomaly_count"]:.2f}\n"
+          f"anomaly_rate     : {summary["anomaly_rate"]:.2%}\n"
+          )
+    return summary
+
+
+
+summarize_sensor_data(df_clean)
 
 
 # EXERCISE 23 — End-to-End Pipeline
@@ -929,8 +1002,20 @@ Do not create one giant function containing duplicate logic.
 """
 
 def run_pipeline(input_path, output_path):
-    # TODO
-    pass
+    df_r=load_sensor_data(input_path)
+    df_c=clean_sensor_data(df_r)
+    df_a=add_anomaly_feature(df_c)
+    summary=summarize_sensor_data(df_a)
+
+    df_c.to_csv(output_path)
+
+    return summary
+
+
+CSV_cleaned_file_path = "machine_sensor_cleaned.csv"
+CSV_file_path = "machine_sensor_dirty.csv"
+summary=run_pipeline(CSV_file_path,CSV_cleaned_file_path)
+
 
 
 # EXERCISE 24 — JSON Summary
@@ -956,6 +1041,14 @@ json.load
 """
 
 # TODO
+json_file_path = "sensor_summary.json"
+
+with open(json_file_path, "w") as file:
+    json.dump(summary, file)
+
+with open(json_file_path, "r") as file:
+    sensor_summary = json.load(file)
+    print(sensor_summary)
 
 
 # ============================================================

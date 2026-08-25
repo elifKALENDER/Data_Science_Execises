@@ -45,6 +45,15 @@ Convert to a NumPy array and inspect:
 """
 temperature_readings = [65, 91, 72, 88, 69, 76, 95, 84, 79, 102]
 # TODO
+arr=np.array(temperature_readings)
+
+print(f"""
+type    : {type(arr)}
+ndim    : {arr.ndim}
+shape   : {arr.shape}
+size    : {arr.size}
+dtype   : {arr.dtype}
+""")
 
 
 # EXERCISE 2 — NumPy Conditions
@@ -56,7 +65,12 @@ C) readings > 80
 D) readings between 70 and 90
 """
 # TODO
-
+print(f"""
+{arr[:5]} 
+{arr[-3:]} 
+{arr[arr>80]}
+{arr[(70<arr)&(arr<80)]}
+""")
 
 # EXERCISE 3 — NumPy Statistics
 """
